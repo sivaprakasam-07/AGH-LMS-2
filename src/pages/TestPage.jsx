@@ -1,20 +1,53 @@
-import { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import ProblemPanel from "../components/ProblemPanel";
 import CodeEditorPanel from "../components/CodeEditorPanel";
 import SideNav from "../components/SideNav";
 import HeaderBar from "../components/HeaderBar";
 
+const MIN_LEFT = 20; // percent
+const MAX_LEFT = 80; // percent
+
 const TestPage = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const totalQuestions = 3;
-  const [secondsLeft, setSecondsLeft] = useState(60 * 15); // 15 minutes
+  const [leftWidth, setLeftWidth] = useState(50); // percent
+  const dragging = useRef(false);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Mouse event handlers for resizing
+  const onMouseDown = (e) => {
+    e.preventDefault();
+    dragging.current = true;
+    document.body.style.cursor = "col-resize";
+  };
+  const onMouseMove = (e) => {
+    if (!dragging.current) return;
+    const container = document.getElementById("split-container");
+    const rect = container.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    let percent = (x / rect.width) * 100;
+    if (percent < MIN_LEFT) percent = MIN_LEFT;
+    if (percent > MAX_LEFT) percent = MAX_LEFT;
+    setLeftWidth(percent);
+  };
+  const onMouseUp = () => {
+    dragging.current = false;
+    document.body.style.cursor = "";
+  };
+
+  // Attach/detach listeners
+  React.useEffect(() => {
+    if (dragging.current) {
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    } else {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  });
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
@@ -28,63 +61,41 @@ const TestPage = () => {
     }
   };
 
-  const formatTime = (secs) => {
-    const h = String(Math.floor(secs / 3600)).padStart(2, "0");
-    const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
-    const s = String(secs % 60).padStart(2, "0");
-    return `${h}H : ${m}M : ${s}S`;
-  };
-
   return (
-    <div className="h-screen w-full flex flex-col bg-white">
-      {/* HeaderBar with timer and sticky positioning */}
-      <div className="sticky top-0 z-20 bg-gray-100 border-b border-gray-300 flex items-center justify-between h-14 px-6">
-        <button
-          className="text-gray-700 font-semibold text-lg flex items-center gap-1"
-          onClick={handlePrev}
-          disabled={currentQuestionIndex === 0}
-        >
-          <span className="text-xl">&#8592;</span> Prev
-        </button>
-        <div className="flex items-center gap-6">
-          <span className="font-mono text-gray-700 text-base">
-            {formatTime(secondsLeft)}
-          </span>
-        </div>
-        <button
-          className="text-gray-700 font-semibold text-lg flex items-center gap-1"
-          onClick={handleNext}
-          disabled={currentQuestionIndex === totalQuestions - 1}
-        >
-          Next <span className="text-xl">&#8594;</span>
-        </button>
-      </div>
-      <div className="flex flex-grow min-h-0">
+    <div className="h-screen w-full flex flex-col overflow-hidden">
+      <HeaderBar
+        currentQuestionIndex={currentQuestionIndex}
+        totalQuestions={totalQuestions}
+        handlePrev={handlePrev}
+        handleNext={handleNext}
+      />
+      <div className="flex flex-1 min-h-0">
         <SideNav
           currentQuestionIndex={currentQuestionIndex}
           setCurrentQuestionIndex={setCurrentQuestionIndex}
           totalQuestions={totalQuestions}
         />
-        <div className="flex flex-grow min-h-0">
-          <div className="w-[48%] border-r border-gray-300 overflow-y-auto flex flex-col justify-between">
-            <div className="flex-grow overflow-y-auto">
-              <ProblemPanel questionIndex={currentQuestionIndex} />
-            </div>
-            <div className="bg-white border-t border-gray-200 p-4 flex justify-start sticky bottom-0 z-10">
-              <button className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded text-base font-semibold">
-                Submit
-              </button>
-            </div>
+        <div id="split-container" className="flex flex-1 min-h-0">
+          {/* Left Panel */}
+          <div
+            className="flex-1 min-w-0 min-h-0 overflow-auto border-r border-gray-300 bg-white"
+            style={{ width: `calc(${leftWidth}% - 4px)` }}
+          >
+            <ProblemPanel questionIndex={currentQuestionIndex} />
           </div>
-          <div className="w-[52%] overflow-y-auto flex flex-col justify-between">
-            <div className="flex-grow overflow-y-auto">
-              <CodeEditorPanel questionIndex={currentQuestionIndex} />
-            </div>
-            <div className="bg-white border-t border-gray-200 p-4 flex justify-end sticky bottom-0 z-10">
-              <button className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-2 rounded text-base font-semibold">
-                Mark for Review
-              </button>
-            </div>
+          {/* Draggable Divider */}
+          <div
+            className="w-2 cursor-col-resize bg-gray-200 hover:bg-gray-300 transition-colors duration-100 z-10"
+            onMouseDown={onMouseDown}
+            style={{ userSelect: "none" }}
+            aria-label="Resize panels"
+          />
+          {/* Right Panel */}
+          <div
+            className="flex-1 min-w-0 min-h-0 overflow-auto bg-white"
+            style={{ width: `calc(${100 - leftWidth}% - 4px)` }}
+          >
+            <CodeEditorPanel questionIndex={currentQuestionIndex} />
           </div>
         </div>
       </div>
